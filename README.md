@@ -50,19 +50,31 @@ EXECUTE sp_delete_log_shipping_primary_database @database_name
 EXEC msdb..sp_delete_job @job_name = <enter_job_name>
 
 ```
+
 4.	Delete the _LSTracking job:
 
+```TSQL
+
 EXEC msdb..sp_delete_job @job_name = <enter_job_name>
+
+```
 
 5.	Open SSMS and connect to the secondary SQL Server instance.
 6.	Delete the LSTracking and LSRestore_ jobs:
 
+```TSQL
+
 EXEC msdb..sp_delete_job @job_name
+
+```
 
 7.	If your secondary SQL Server instance isn’t in the production role and the target database is not in use, drop the log shipped databases:
 
+```TSQL
+
 EXECUTE msdb.dbo.rds_drop_database @database_name
 
+```
 
 ## Limitations
 
