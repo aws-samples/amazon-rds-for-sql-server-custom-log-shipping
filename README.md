@@ -14,6 +14,46 @@ Be sure to:
 * Change the title in this README
 * Edit your repository description on GitHub
 
+## Troubleshooting
+
+If for any reason you find the secondary SQL Server instance is working on a specific transaction log file for longer than expected and you want to reset it, complete the following steps:
+
+1.	Open SSMS and connect to the secondary SQL Server instance.
+2.	Open a new query window and run the following command after replacing the database name and file name in the input parameter. For example:
+
+UPDATE [dbmig].[dbo].[tblLSTracking]
+SET	[processing_status] = NULL	
+WHERE [database_name] = 'AdventureWorks2019'
+AND [file_name] = 'AdventureWorks2019_20220213184501.trn'
+AND [processing_status] = 'in-progress'
+
+
+
+## Clean up
+
+1.	Open SSMS and connect to the primary SQL Server instance.
+2.	Remove the log shipping configuration for each database:
+
+EXECUTE sp_delete_log_shipping_primary_database @database_name
+
+3.	Delete _FullBackup_ jobs:
+
+EXEC msdb..sp_delete_job @job_name = <enter_job_name>
+
+4.	Delete the _LSTracking job:
+
+EXEC msdb..sp_delete_job @job_name = <enter_job_name>
+
+5.	Open SSMS and connect to the secondary SQL Server instance.
+6.	Delete the LSTracking and LSRestore_ jobs:
+
+EXEC msdb..sp_delete_job @job_name
+
+7.	If your secondary SQL Server instance isn’t in the production role and the target database is not in use, drop the log shipped databases:
+
+EXECUTE msdb.dbo.rds_drop_database @database_name
+
+
 ## Limitations
 
 *	TDE-enabled database – Amazon RDS for SQL Server supports Transparent Database Encryption (TDE), but as part of the managed service offering, the certificate is managed by AWS. For this reason, a TDE-enabled on-premises database backup can’t be restored on Amazon RDS for SQL Server. You need to remove TDE from the primary SQL Server instance before setting up custom log shipping. Post cutover, you can enable TDE on the secondary SQL Server instance.
