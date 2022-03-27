@@ -1,4 +1,4 @@
-## My Project
+## Automate on-premises or Amazon EC2 SQL Server to Amazon RDS for SQL Server migration using custom log shipping
 
 TODO: Fill this README out!
 
