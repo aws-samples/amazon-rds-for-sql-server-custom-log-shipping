@@ -21,12 +21,15 @@ If for any reason you find the secondary SQL Server instance is working on a spe
 1.	Open SSMS and connect to the secondary SQL Server instance.
 2.	Open a new query window and run the following command after replacing the database name and file name in the input parameter. For example:
 
+```TSQL
+
 UPDATE [dbmig].[dbo].[tblLSTracking]
 SET	[processing_status] = NULL	
 WHERE [database_name] = 'AdventureWorks2019'
 AND [file_name] = 'AdventureWorks2019_20220213184501.trn'
 AND [processing_status] = 'in-progress'
 
+```
 
 
 ## Clean up
@@ -34,12 +37,19 @@ AND [processing_status] = 'in-progress'
 1.	Open SSMS and connect to the primary SQL Server instance.
 2.	Remove the log shipping configuration for each database:
 
+```TSQL
+
 EXECUTE sp_delete_log_shipping_primary_database @database_name
+
+```
 
 3.	Delete _FullBackup_ jobs:
 
+```TSQL
+
 EXEC msdb..sp_delete_job @job_name = <enter_job_name>
 
+```
 4.	Delete the _LSTracking job:
 
 EXEC msdb..sp_delete_job @job_name = <enter_job_name>
