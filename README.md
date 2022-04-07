@@ -13,8 +13,8 @@ To test this solution, you must have the following prerequisites:
 *	An RDS for SQL Server instance created in Single-AZ mode
 *	The native backup and restore option enabled on the RDS for SQL Server instance using the S3 bucket
 *	An EC2 instance with SQL Server installed and a user database configured
-*	An Amazon S3 file gateway created using Amazon EC2 as Platform options
-*	A file share created using Server Message Block (SMB) for Access objects using input and authentication method for Guest access
+*	An Amazon S3 file gateway [created](https://docs.aws.amazon.com/filegateway/latest/files3/create-gateway-file.html) using Amazon EC2 as Platform options
+*	A file share [created](https://docs.aws.amazon.com/filegateway/latest/files3/CreatingAnSMBFileShare.html) using Server Message Block (SMB) for Access objects using input and authentication method for Guest access
 *	On the primary SQL Server instance, the following command is run at the command prompt to store the guest credential in Windows Credential Manager:
 
 cmdkey /add:GatewayIPAddress /user:DomainName\smbguest /pass:Password
