@@ -19,7 +19,9 @@ To test this solution, you must have the following prerequisites:
 
 cmdkey /add:GatewayIPAddress /user:DomainName\smbguest /pass:Password
 
-For example, ```
+For example, 
+
+```
 
 C:\Users\Administrator>cmdkey /add:172.31.43.62\rds-sql-backup-restore-demo /user:sgw-61DA3908\smbguest /pass:***********.
 
@@ -29,7 +31,9 @@ C:\Users\Administrator>cmdkey /add:172.31.43.62\rds-sql-backup-restore-demo /use
 
 net use WindowsDriveLetter: \\$GatewayIPAddress\$Path /persistent:yes /savecred
 
-For example, ```
+For example, 
+
+```
 
 C:\Users\Administrator>net use E: \\172.31.43.62\rds-sql-backup-restore-demo /persistent:yes /savecred.
 
