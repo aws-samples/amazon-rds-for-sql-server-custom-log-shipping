@@ -5,6 +5,40 @@ The custom log shipping solution is built using Microsoft’s native log shippin
 
 ![image](https://user-images.githubusercontent.com/96596850/160265303-45180db9-474b-4ef9-b628-1051c52c8154.png)
 
+## Prerequisites
+To test this solution, you must have the following prerequisites:
+
+* An AWS account
+* An S3 bucket
+*	An RDS for SQL Server instance created in Single-AZ mode
+*	The native backup and restore option enabled on the RDS for SQL Server instance using the S3 bucket
+*	An EC2 instance with SQL Server installed and a user database configured
+*	An Amazon S3 file gateway created using Amazon EC2 as Platform options
+*	A file share created using Server Message Block (SMB) for Access objects using input and authentication method for Guest access
+*	On the primary SQL Server instance, the following command is run at the command prompt to store the guest credential in Windows Credential Manager:
+
+cmdkey /add:GatewayIPAddress /user:DomainName\smbguest /pass:Password
+
+For example, ```
+
+C:\Users\Administrator>cmdkey /add:172.31.43.62\rds-sql-backup-restore-demo /user:sgw-61DA3908\smbguest /pass:***********.
+
+```
+
+*	The S3 bucket/SMB file share is mounted at the primary SQL Server using the following command:
+
+net use WindowsDriveLetter: \\$GatewayIPAddress\$Path /persistent:yes /savecred
+
+For example, ```
+
+C:\Users\Administrator>net use E: \\172.31.43.62\rds-sql-backup-restore-demo /persistent:yes /savecred.
+
+```
+
+*	Follow the optional steps mentioned later in this post if the newly mounted volume is not visible to the primary SQL Server instance
+*	sysadmin permission on the primary SQL Server instance and access to the primary user name and password for the secondary SQL Server instance
+
+
 
 
 TODO: Fill this README out!
