@@ -42,15 +42,193 @@ C:\Users\Administrator>net use E: \\172.31.43.62\rds-sql-backup-restore-demo /pe
 *	Follow the optional steps mentioned later in this post if the newly mounted volume is not visible to the primary SQL Server instance
 *	sysadmin permission on the primary SQL Server instance and access to the primary user name and password for the secondary SQL Server instance
 
+## Stage the solution
+To stage this solution, complete the following steps:
+
+1.	Navigate to the GitHub repo and download the source code from your web browser.
+2.	Remote desktop to the EC2 instance hosting your primary SQL Server instance and copy the `amazon-rds-for-sql-server-custom-log-shipping-main.zip` folder downloaded on your workspace.
+3.	Open SQL Server Management Studio (SSMS) and connect to the primary SQL Server instance.
+4.	Locate the `01. Primary - Deploy.sql` file within the amazon-rds-for-sql-server-custom-log-shipping-main folder and open in a new window.
+5.	Run the code against the primary SQL Server instance to create a new database called dbmig with stored procedures in it.
+6.	Locate the `02. Secondary - Deploy.sql` file within the amazon-rds-for-sql-server-custom-log-shipping-main folder and open in a new window.
+7.	Run the code against the secondary SQL Server instance to create a new database called dbmig with a table and stored procedures in it.
+
+## Implement the solution
+To implement the custom log shipping solution, complete the following steps:
+
+1.	Open SSMS and connect to the primary SQL Server instance.
+2.	Open a new query window and run the following command after replacing the input parameter values. Make sure you pass the database names exactly the way they appear in the SSMS Object Explorer. This procedure call creates the following:
+a.	A folder in the S3 bucket after the primary SQL Server instance name.
+b.	`xp_cmdshell` is enabled during the folder creation process and disabled immediately after the folder creation is complete.
+c.	Subfolders by database names supplied as a comma-separated list in the input. 
+d.	A linked server between the primary and secondary SQL Server instances
+e.	A `_FullBackup_ job` for each database supplied in the input.
+f.	A `_LSTracking` job.
+
+```TSQL
+
+USE [dbmig]
+GO
+
+DECLARE @RC int
+DECLARE @ListofDBs nvarchar(max)
+DECLARE @S3DriveLetter char(1)
+DECLARE @RDSServerName nvarchar(500)
+DECLARE @RDSAdminUser nvarchar(100)
+DECLARE @RDSAdminPassword nvarchar(100)
+
+EXECUTE @RC = [dbo].[uspManagePrimarySetPrimary] 
+   @ListofDBs = '<database_1,database_2,database_3>'
+  ,@S3DriveLetter = '<s3_driver_letter>'
+  ,@RDSServerName = '<rds_sql_instancename,port>'
+  ,@RDSAdminUser = '<admin_user_name>'
+  ,@RDSAdminPassword = '<admin_user_password>'
+GO
+
+```
+
+For example, see the following code with the supplied parameters:
+
+```TSQL
+
+USE [dbmig]
+GO
+
+DECLARE @RC int
+DECLARE @ListofDBs nvarchar(max)
+DECLARE @S3DriveLetter char(1)
+DECLARE @RDSServerName nvarchar(500)
+DECLARE @RDSAdminUser nvarchar(100)
+DECLARE @RDSAdminPassword nvarchar(100)
+
+EXECUTE @RC = [dbo].[uspManagePrimarySetPrimary] 
+   @ListofDBs = 'AdventureWorks2019,AdventureWorksDW2019,pubs2,test_1'
+  ,@S3DriveLetter = 'E'
+  ,@RDSServerName = 'mssql-ad-demo.cfehwllkcxuv.us-east-1.rds.amazonaws.com,1433'
+  ,@RDSAdminUser = 'Admin'
+  ,@RDSAdminPassword = '**********'
+GO
+
+```
+
+3.	Disable any existing transaction log backup job you might have as part of your database maintenance plan.
+4.	Locate the 03. Primary - Deploy LS Tracking.sql file within the amazon-rds-for-sql-server-custom-log-shipping-main folder and open in a new window.
+5.	Run the code against the primary SQL Server instance to create a new procedure uspManagePrimaryLSTracking within the dbmig database.
+6.	_FullBackup_ jobs are not scheduled as default. You may run them one at a time or you can run them all together by navigating to Job Activity Monitor in SQL Server Agent. 
+
+
+7.	Wait for the full backup to complete and then enable the _LSTracking job, which is deployed as disabled. The tracking job is scheduled to run every 5 minutes.
+8.	Open a new query window and run the following command at the primary SQL Server instance after replacing the input parameter values. This procedure call does the following:
+a.	Enables log shipping for the databases supplied in the input.
+b.	Creates a _LSBackup_ job for each database supplied in the input.
+
+
+```TSQL
+
+USE [dbmig]
+GO
+
+DECLARE @RC int
+DECLARE @ListofDBs nvarchar(max)
+DECLARE @S3DriveLetter char(1)
+DECLARE @LogBackupFrequency smallint
+
+EXECUTE @RC = [dbo].[uspManagePrimarySetLogShipping] 
+   @ListofDBs = '<database_1,database_2,database_3>'
+  ,@S3DriveLetter = '<s3_driver_letter>'
+  ,@LogBackupFrequency = '<log_backup_frequency_in_minutes>'
+GO
+
+```
+
+For example, see the following code with the supplied parameters:
+
+```TSQL
+
+USE [dbmig]
+GO
+
+DECLARE @RC int
+DECLARE @ListofDBs nvarchar(max)
+DECLARE @S3DriveLetter char(1)
+DECLARE @LogBackupFrequency smallint
+
+EXECUTE @RC = [dbo].[uspManagePrimarySetLogShipping] 
+   @ListofDBs = 'AdventureWorks2019,AdventureWorksDW2019,pubs2,test_1'
+  ,@S3DriveLetter = 'E'
+  ,@LogBackupFrequency = 5
+GO
+
+```
+
+9.	Open a new query window and run the following command at the primary SQL Server instance to capture the primary SQL Server instance name, which we use later: 
+
+```TSQL
+
+DECLARE @LvSQLInstanceName VARCHAR(500)
+SELECT @LvSQLInstanceName = CONVERT(VARCHAR(500), SERVERPROPERTY('InstanceName'))
+IF(@LvSQLInstanceName IS NULL)
+BEGIN
+SET @LvSQLInstanceName = CONVERT(VARCHAR(500), SERVERPROPERTY('MachineName'))
+END
+SELECT @LvSQLInstanceName
+
+```
+10.	Open SSMS and connect to the secondary SQL Server instance.
+11.	Open a new query window and run the following command after replacing the input parameter values. This procedure call does the following:
+a.	Restores full backups in NORECOVERY.
+b.	Creates a LSRestore_ job for each database supplied in the input.
+
+```TSQL
+
+USE [dbmig]
+GO
+
+DECLARE @RC int
+DECLARE @ListofDBs nvarchar(max)
+DECLARE @S3BucketARN nvarchar(500)
+DECLARE @PrimaryServerName nvarchar(500)
+DECLARE @RDSAdminUser nvarchar(100)
+DECLARE @LogRestoreFrequency smallint
+
+EXECUTE @RC = [dbo].[uspManageSecondarySetSecondary] 
+   @ListofDBs = '<database_1,database_2,database_3>'
+  ,@S3BucketARN = '<s3_bucket_arn>'
+  ,@PrimaryServerName = 'primary_sql_instance_name'
+  ,@RDSAdminUser = '<admin_user_name>'
+  ,@LogRestoreFrequency = '<log_restore_frequency_in_minutes>'
+GO
+```
+
+For example, see the following code with the supplied parameters:
+
+```TSQL
+
+USE [dbmig]
+GO
+
+DECLARE @RC int
+DECLARE @ListofDBs nvarchar(max)
+DECLARE @S3BucketARN nvarchar(500)
+DECLARE @PrimaryServerName nvarchar(500)
+DECLARE @RDSAdminUser nvarchar(100)
+DECLARE @LogRestoreFrequency smallint
+
+EXECUTE @RC = [dbo].[uspManageSecondarySetSecondary] 
+   @ListofDBs = 'AdventureWorks2019,AdventureWorksDW2019,pubs2,test_1'
+  ,@S3BucketARN = 'arn:aws:s3:::rds-sql-backup-restore-demo'
+  ,@PrimaryServerName = 'EC2AMAZ-LBQS5OK'
+  ,@RDSAdminUser = 'Admin'
+  ,@LogRestoreFrequency = 5
+GO
+
+```
+
+12.	Consider updating your operational run-book to refer to the mount point (E:\ drive) as your new transaction log backup location for any point-in-time recovery scenario until the cutover.
 
 
 
-TODO: Fill this README out!
 
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
 
 ## Troubleshooting
 
