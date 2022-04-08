@@ -3,6 +3,8 @@
 ## Architecture overview
 The custom log shipping solution is built using Microsoft’s native log shipping principles, where the transaction log backups are copied from the primary SQL Server instance to the secondary SQL Server instance and applied to each of the secondary databases individually on a scheduled basis. A tracking table records the history of backup and restore operations, and is used as the monitor. The following diagram illustrates this architecture.
 
+In our solution, we reference the on-premises source SQL Server as the primary SQL Server instance and the target Amazon RDS for SQL Server as the secondary SQL Server instance.
+
 ![image](https://user-images.githubusercontent.com/96596850/160265303-45180db9-474b-4ef9-b628-1051c52c8154.png)
 
 ## Prerequisites
@@ -10,12 +12,12 @@ To test this solution, you must have the following prerequisites:
 
 * An AWS account
 * An S3 bucket
-*	An RDS for SQL Server instance created in Single-AZ mode
-*	The native backup and restore option enabled on the RDS for SQL Server instance using the S3 bucket
-*	An EC2 instance with SQL Server installed and a user database configured
-*	An Amazon S3 file gateway [created](https://docs.aws.amazon.com/filegateway/latest/files3/create-gateway-file.html) using Amazon EC2 as Platform options
-*	A file share [created](https://docs.aws.amazon.com/filegateway/latest/files3/CreatingAnSMBFileShare.html) using Server Message Block (SMB) for Access objects using input and authentication method for Guest access
-*	On the primary SQL Server instance, the following command is run at the command prompt to store the guest credential in Windows Credential Manager:
+* An RDS for SQL Server instance created in Single-AZ mode
+* The native backup and restore option enabled on the RDS for SQL Server instance using the S3 bucket
+* An on-prem SQL Server instance with user databases
+* An Amazon S3 file gateway [created](https://docs.aws.amazon.com/filegateway/latest/files3/create-gateway-file.html)
+* A file share [created](https://docs.aws.amazon.com/filegateway/latest/files3/CreatingAnSMBFileShare.html) using Server Message Block (SMB) for Access objects using input and authentication method for Guest access
+* On the primary SQL Server instance, the following command is run at the command prompt to store the guest credential in Windows Credential Manager:
 
 cmdkey /add:GatewayIPAddress /user:DomainName\smbguest /pass:Password
 
@@ -46,7 +48,7 @@ C:\Users\Administrator>net use E: \\172.31.43.62\rds-sql-backup-restore-demo /pe
 To stage this solution, complete the following steps:
 
 1.	Navigate to the GitHub repo and download the source code from your web browser.
-2.	Remote desktop to the EC2 instance hosting your primary SQL Server instance and copy the `amazon-rds-for-sql-server-custom-log-shipping-main.zip` folder downloaded on your workspace.
+2.	Download the `amazon-rds-for-sql-server-custom-log-shipping-main.zip` folder on your workspace.
 3.	Open SQL Server Management Studio (SSMS) and connect to the primary SQL Server instance.
 4.	Locate the `01. Primary - Deploy.sql` file within the amazon-rds-for-sql-server-custom-log-shipping-main folder and open in a new window.
 5.	Run the code against the primary SQL Server instance to create a new database called dbmig with stored procedures in it.
@@ -57,13 +59,7 @@ To stage this solution, complete the following steps:
 To implement the custom log shipping solution, complete the following steps:
 
 1.	Open SSMS and connect to the primary SQL Server instance.
-2.	Open a new query window and run the following command after replacing the input parameter values. Make sure you pass the database names exactly the way they appear in the SSMS Object Explorer. This procedure call creates the following:
-a.	A folder in the S3 bucket after the primary SQL Server instance name.
-b.	`xp_cmdshell` is enabled during the folder creation process and disabled immediately after the folder creation is complete.
-c.	Subfolders by database names supplied as a comma-separated list in the input. 
-d.	A linked server between the primary and secondary SQL Server instances
-e.	A `_FullBackup_ job` for each database supplied in the input.
-f.	A `_LSTracking` job.
+2.	Open a new query window and run the following command after replacing the input parameter values.
 
 ```TSQL
 
@@ -87,41 +83,12 @@ GO
 
 ```
 
-For example, see the following code with the supplied parameters:
-
-```TSQL
-
-USE [dbmig]
-GO
-
-DECLARE @RC int
-DECLARE @ListofDBs nvarchar(max)
-DECLARE @S3DriveLetter char(1)
-DECLARE @RDSServerName nvarchar(500)
-DECLARE @RDSAdminUser nvarchar(100)
-DECLARE @RDSAdminPassword nvarchar(100)
-
-EXECUTE @RC = [dbo].[uspManagePrimarySetPrimary] 
-   @ListofDBs = 'AdventureWorks2019,AdventureWorksDW2019,pubs2,test_1'
-  ,@S3DriveLetter = 'E'
-  ,@RDSServerName = 'mssql-ad-demo.cfehwllkcxuv.us-east-1.rds.amazonaws.com,1433'
-  ,@RDSAdminUser = 'Admin'
-  ,@RDSAdminPassword = '**********'
-GO
-
-```
-
 3.	Disable any existing transaction log backup job you might have as part of your database maintenance plan.
 4.	Locate the 03. Primary - Deploy LS Tracking.sql file within the amazon-rds-for-sql-server-custom-log-shipping-main folder and open in a new window.
 5.	Run the code against the primary SQL Server instance to create a new procedure uspManagePrimaryLSTracking within the dbmig database.
 6.	_FullBackup_ jobs are not scheduled as default. You may run them one at a time or you can run them all together by navigating to Job Activity Monitor in SQL Server Agent. 
-
-
 7.	Wait for the full backup to complete and then enable the _LSTracking job, which is deployed as disabled. The tracking job is scheduled to run every 5 minutes.
-8.	Open a new query window and run the following command at the primary SQL Server instance after replacing the input parameter values. This procedure call does the following:
-a.	Enables log shipping for the databases supplied in the input.
-b.	Creates a _LSBackup_ job for each database supplied in the input.
-
+8.	Open a new query window and run the following command at the primary SQL Server instance after replacing the input parameter values. 
 
 ```TSQL
 
@@ -141,26 +108,6 @@ GO
 
 ```
 
-For example, see the following code with the supplied parameters:
-
-```TSQL
-
-USE [dbmig]
-GO
-
-DECLARE @RC int
-DECLARE @ListofDBs nvarchar(max)
-DECLARE @S3DriveLetter char(1)
-DECLARE @LogBackupFrequency smallint
-
-EXECUTE @RC = [dbo].[uspManagePrimarySetLogShipping] 
-   @ListofDBs = 'AdventureWorks2019,AdventureWorksDW2019,pubs2,test_1'
-  ,@S3DriveLetter = 'E'
-  ,@LogBackupFrequency = 5
-GO
-
-```
-
 9.	Open a new query window and run the following command at the primary SQL Server instance to capture the primary SQL Server instance name, which we use later: 
 
 ```TSQL
@@ -175,9 +122,7 @@ SELECT @LvSQLInstanceName
 
 ```
 10.	Open SSMS and connect to the secondary SQL Server instance.
-11.	Open a new query window and run the following command after replacing the input parameter values. This procedure call does the following:
-a.	Restores full backups in NORECOVERY.
-b.	Creates a LSRestore_ job for each database supplied in the input.
+11.	Open a new query window and run the following command after replacing the input parameter values. 
 
 ```TSQL
 
@@ -198,30 +143,6 @@ EXECUTE @RC = [dbo].[uspManageSecondarySetSecondary]
   ,@RDSAdminUser = '<admin_user_name>'
   ,@LogRestoreFrequency = '<log_restore_frequency_in_minutes>'
 GO
-```
-
-For example, see the following code with the supplied parameters:
-
-```TSQL
-
-USE [dbmig]
-GO
-
-DECLARE @RC int
-DECLARE @ListofDBs nvarchar(max)
-DECLARE @S3BucketARN nvarchar(500)
-DECLARE @PrimaryServerName nvarchar(500)
-DECLARE @RDSAdminUser nvarchar(100)
-DECLARE @LogRestoreFrequency smallint
-
-EXECUTE @RC = [dbo].[uspManageSecondarySetSecondary] 
-   @ListofDBs = 'AdventureWorks2019,AdventureWorksDW2019,pubs2,test_1'
-  ,@S3BucketARN = 'arn:aws:s3:::rds-sql-backup-restore-demo'
-  ,@PrimaryServerName = 'EC2AMAZ-LBQS5OK'
-  ,@RDSAdminUser = 'Admin'
-  ,@LogRestoreFrequency = 5
-GO
-
 ```
 
 12.	Consider updating your operational run-book to refer to the mount point (E:\ drive) as your new transaction log backup location for any point-in-time recovery scenario until the cutover.
