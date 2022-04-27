@@ -1,5 +1,9 @@
 ## Automate on-premises or Amazon EC2 SQL Server to Amazon RDS for SQL Server migration using custom log shipping
 
+Detailed documentation of this solution is published as blog and available at the following link:
+
+https://aws.amazon.com/blogs/database/automate-on-premises-or-amazon-ec2-sql-server-to-amazon-rds-for-sql-server-migration-using-custom-log-shipping/
+
 ## Architecture overview
 The custom log shipping solution is built using Microsoft’s native log shipping principles, where the transaction log backups are copied from the primary SQL Server instance to the secondary SQL Server instance and applied to each of the secondary databases individually on a scheduled basis. A tracking table records the history of backup and restore operations, and is used as the monitor. The following diagram illustrates this architecture.
 
